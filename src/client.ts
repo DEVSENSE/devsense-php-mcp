@@ -10,6 +10,7 @@ import LSP1 = DevsenseNode.Devsense.LanguageServer.Protocol
 
 import { DefaultCodeStyle } from './codestyles';
 import { TextDocument } from './textdocument';
+import { DefaultComposerNodes, DefaultPhpVersion } from './consts';
 
 export namespace LSP {
 
@@ -120,16 +121,25 @@ export class LanguageClient {
     }
 
     constructor(
+        parallelism?: number,
+        composerNodes?: boolean,
     ) {
+        let args = [
+            '--composerNodes', composerNodes?.toString() ?? DefaultComposerNodes, // enable/disable(default) lazy caching of packages in vendor
+        ]
+        if (typeof parallelism == 'number' && parallelism > 0) {
+            args.push('--parallelism', parallelism.toString())
+        }
+
         const lspath = LS.languageServerPath()
         //const lspath = `${__dirname}/../node_modules/devsense-php-ls-${platform()}-${arch()}/dist/devsense.php.ls.exe`
         //const lspath = "C:/Users/jmise/Projects/phptools-vscode/src/Devsense.PHP.LanguageServer/bin/Debug/net9.0/devsense.php.ls.exe"
-        const lsprocess = spawn(lspath ?? path.resolve(lspath), [
-            '--composerNodes', 'false', // disable lazy caching of packages in vendor
-        ], {
-            shell: true,
-            stdio: ['pipe', 'pipe', 'pipe', 'pipe']
-        })
+        const lsprocess = spawn(
+            lspath ?? path.resolve(lspath),
+            args, {
+                shell: true,
+                stdio: ['pipe', 'pipe', 'pipe', 'pipe']
+            })
 
         lsprocess.stdout.on('data', function (data) {
             //console.log('stdout: ' + data.toString());
@@ -146,7 +156,7 @@ export class LanguageClient {
         )
     }
 
-    async start(root: string, include: string[], exclude: string[] | undefined, phpVersion: string = '8.4', codeStyle = DefaultCodeStyle) {
+    async start(root: string, include: string[], exclude: string[] | undefined, phpVersion: string = DefaultPhpVersion, codeStyle = DefaultCodeStyle) {
 
         this.connection.onNotification(LSP.devsenseLoadStatus, async (args) => {
             this.loadStatusEvent.fire(args)

@@ -5,6 +5,7 @@ import { InvalidArgumentError, Option, program } from 'commander';
 import { LanguageClient } from './client';
 import { CodeStyles, DefaultCodeStyle } from './codestyles';
 import { TextDocument } from './textdocument';
+import { DefaultPhpVersion } from './consts';
 
 class Logger {
     constructor(
@@ -39,7 +40,7 @@ async function main(argv: string[]) {
         .option('-r, --root <path>', 'Root directory, to which are other parameters relative. Current working directory by default.')
         //.option('-i, --include <path...>', 'Files or directories (including sub-directories) to be indexed.', ['.'])
         .option('-x, --exclude <path...>', 'Files or directories to be excluded from indexing.')
-        //.option('-c, --concurrency <N>', 'Number of files being read in parallel.', str => parseInt(str), DefaultConcurrency)
+        .option('-p, --parallelism <N>', 'Number of parallel threads used for reading files and analysis.', str => parseInt(str))
         //.option('--encoding <enc>', 'Encoding used for source files.', str => <BufferEncoding>str, 'utf-8')
         .option('-c, --check', 'Perform code analysis and output list of problems.')
         .addOption(
@@ -85,7 +86,7 @@ async function main(argv: string[]) {
                 root,
                 paths ?? ['**/*.php'],
                 options.exclude,
-                '8.4',
+                DefaultPhpVersion,
                 typeof options.format == 'string' ? options.format : DefaultCodeStyle
             )
             await indexing
