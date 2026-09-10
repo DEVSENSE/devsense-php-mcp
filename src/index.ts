@@ -33,7 +33,7 @@ class Logger {
 async function main(argv: string[]) {
 
     await program
-        .version('0.2.0')
+        .version('0.3.0')
         .name('phpy')
         .description('PHP Languge Server CLI')
         .showHelpAfterError(true)
