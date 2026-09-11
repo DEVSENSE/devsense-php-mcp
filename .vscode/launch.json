@@ -13,11 +13,9 @@
             ],
             "console": "integratedTerminal",
             "args": [
-                "src/index.ts",
-                "--check",
-                "--format"
+                "src/index.ts"
             ],
-            "name": "phpy",
+            "name": "devsense-php-mcp",
             "skipFiles": [
                 "<node_internals>/**"
             ]

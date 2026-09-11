@@ -1,14 +1,14 @@
 {
-    "name": "phpy",
+    "name": "devsense-php-mcp",
     "version": "1.0.19264",
-    "description": "Devsense PHP Code Analysis CLI",
+    "description": "Devsense PHP MCP Server",
     "main": "dist/index.js",
     "bin": {
-        "phpy": "dist/index.js"
+        "devsense-php-mcp": "dist/index.js"
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/DEVSENSE/phpy.git"
+        "url": "git+https://github.com/DEVSENSE/devsense-php-mcp.git"
     },
     "clean-package": {
         "remove": [
@@ -28,10 +28,9 @@
     "keywords": [
         "cli",
         "php",
-        "code analysis",
-        "code fix",
-        "code check",
-        "linter"
+        "mcp",
+        "agent",
+        "ai"
     ],
     "dependencies": {
         "commander": "^13.1.0",

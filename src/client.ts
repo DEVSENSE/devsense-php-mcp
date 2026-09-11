@@ -10,7 +10,8 @@ import LSP1 = DevsenseNode.Devsense.LanguageServer.Protocol
 
 import { DefaultCodeStyle } from './codestyles';
 import { TextDocument } from './textdocument';
-import { DefaultComposerNodes, DefaultPhpVersion } from './consts';
+import { DefaultComposerNodes, DefaultMcpServerPort, DefaultPhpVersion } from './consts';
+import { Logger } from './logger';
 
 export namespace LSP {
 
@@ -57,6 +58,10 @@ export class LanguageClient {
     private initresponse: any
 
     private readonly documents = new Map<string, TextDocument>()
+
+    public get MCPServerPort() {
+        return this.initresponse?.capabilities?.mcpServerPort
+    }
 
     public onLoadStatus(listener: (e: LSP.LoadStatusParams) => any): Disposable {
         return this.loadStatusEvent.on(listener)
@@ -121,19 +126,21 @@ export class LanguageClient {
     }
 
     constructor(
-        parallelism?: number,
-        composerNodes?: boolean,
+        private readonly log: Logger,
+        port?: number
     ) {
-        let args = [
-            '--composerNodes', composerNodes?.toString() ?? DefaultComposerNodes, // enable/disable(default) lazy caching of packages in vendor
+        let args: string[] = [
+            //'-composerNodes', composerNodes?.toString() ?? DefaultComposerNodes, // enable/disable(default) lazy caching of packages in vendor
+            '-mcp',
+            '-mcp-server-port', port?.toString() ?? DefaultMcpServerPort.toString(),
         ]
-        if (typeof parallelism == 'number' && parallelism > 0) {
-            args.push('--parallelism', parallelism.toString())
-        }
+        // if (typeof parallelism == 'number' && parallelism > 0) {
+        //     args.push('--parallelism', parallelism.toString())
+        // }
 
         const lspath = LS.languageServerPath()
         //const lspath = `${__dirname}/../node_modules/devsense-php-ls-${platform()}-${arch()}/dist/devsense.php.ls.exe`
-        //const lspath = "C:/Users/jmise/Projects/phptools-vscode/src/Devsense.PHP.LanguageServer/bin/Debug/net9.0/devsense.php.ls.exe"
+        //const lspath = "C:\\Users\\jmise\\Projects\\phptools-vscode\\src\\Devsense.PHP.LanguageServer\\bin\\Debug\\net10.0\\devsense.php.ls.exe"
         const lsprocess = spawn(
             lspath ?? path.resolve(lspath),
             args, {
@@ -141,12 +148,12 @@ export class LanguageClient {
                 stdio: ['pipe', 'pipe', 'pipe', 'pipe']
             })
 
-        lsprocess.stdout.on('data', function (data) {
+        lsprocess.stdout.on('data', (data) => {
             //console.log('stdout: ' + data.toString());
         })
 
-        lsprocess.stderr.on('data', function (data) {
-            console.error('err: ', data.toString());
+        lsprocess.stderr.on('data', (data) => {
+            this.log.error(new Error(data.toString()));
         })
 
         // Use stdin and stdout for communication:
@@ -154,18 +161,16 @@ export class LanguageClient {
             new rpc.StreamMessageReader(lsprocess.stdout),
             new rpc.StreamMessageWriter(lsprocess.stdin)
         )
-    }
 
-    async start(root: string, include: string[], exclude: string[] | undefined, phpVersion: string = DefaultPhpVersion, codeStyle = DefaultCodeStyle) {
-
+        //
         this.connection.onNotification(LSP.devsenseLoadStatus, async (args) => {
             this.loadStatusEvent.fire(args)
         })
         this.connection.onNotification(LSP.windowShowMessage, args => {
-            //console.log(args)
+            this.log.info(args.message)
         })
         this.connection.onNotification(LSP.windowLogMessage, args => {
-            //console.log(args)
+            this.log.info(args.message)
         })
         this.connection.onNotification(LSP.telemetryEvent, args => {
         })
@@ -177,8 +182,10 @@ export class LanguageClient {
 
         //
         this.connection.listen()
+    }
 
-        //
+    async start(root: string, include: string[], exclude: string[] | undefined, phpVersion: string = DefaultPhpVersion) {
+
         this.initresponse = await this.connection.sendRequest(LSP.initialize, {
             processId: process.pid,
             rootUri: `file://${root}`,
@@ -203,7 +210,6 @@ export class LanguageClient {
                 'php.cache.enableOnlineCache': false,
                 'php.codeLens.enabled': false,
                 'php.sortUses.caseSensitive': false,
-                'php.format.codeStyle': codeStyle,
             },
         })
     }

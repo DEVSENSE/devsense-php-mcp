@@ -5,68 +5,27 @@ import { InvalidArgumentError, Option, program } from 'commander';
 import { LanguageClient } from './client';
 import { CodeStyles, DefaultCodeStyle } from './codestyles';
 import { TextDocument } from './textdocument';
-import { DefaultPhpVersion } from './consts';
-
-class Logger {
-    constructor(
-        private readonly verbose: boolean
-    ) {
-    }
-
-    notimplemented(what: string) {
-        process.stderr.write(`${what} is not implemented\n`)
-    }
-
-    info(text: string) {
-        if (this.verbose) {
-            process.stdout.write(`${text}\n`)
-        }
-    }
-
-    error(err: Error) {
-        if (err && err.message) {
-            process.stderr.write(`${err.message}\n`)
-        }
-    }
-}
+import { DefaultMcpServerPort, DefaultPhpVersion } from './consts';
+import { Logger } from './logger';
 
 async function main(argv: string[]) {
 
     await program
         .version(require('../package.json').version)
-        .name('phpy')
-        .description('PHP Languge Server CLI')
+        .name('devsense-php-mcp')
+        .description('PHP MCP Server')
         .showHelpAfterError(true)
         .option('-r, --root <path>', 'Root directory, to which are other parameters relative. Current working directory by default.')
-        //.option('-i, --include <path...>', 'Files or directories (including sub-directories) to be indexed.', ['.'])
         .option('-x, --exclude <path...>', 'Files or directories to be excluded from indexing.')
-        .option('-p, --parallelism <N>', 'Number of parallel threads used for reading files and analysis.', str => parseInt(str))
-        //.option('--encoding <enc>', 'Encoding used for source files.', str => <BufferEncoding>str, 'utf-8')
-        .option('-c, --check', 'Perform code analysis and output list of problems.')
-        .addOption(
-            new Option('-f, --format [CodeStyle]', 'Perform in-place code format.')
-            .choices(CodeStyles) // not used: overriden by argParser()
-            .argParser((value) => {
-                // match value to CodeStyles enum
-                const lower = value.replace('-', '').toLowerCase()
-                let idx = CodeStyles.findIndex((item) => item.toLowerCase() == lower)
-                if (idx < 0) {
-                    throw new InvalidArgumentError(`Allowed choices are ${CodeStyles.join(', ')}.`)
-                }
-                return CodeStyles[idx]
-            })
-        )
-        .option('--verbose', 'Enable verbose output.')
-        .argument('[path...]', 'Files or directories to be analyzed.')
+        .option('-p, --mcp-port <N>', 'Specify the MCP server port number.', str => parseInt(str), DefaultMcpServerPort)
+        .argument('[path...]', 'Files or directories to be indexed.')
         .action(async (paths: string[] | undefined, options) => {
 
             //
-            const log = new Logger(options.verbose == true)
+            const log = new Logger(true)
             const root = options.root ?? process.cwd()
 
-            log.info(`Starting ...`)
-
-            const client = new LanguageClient()
+            const client = new LanguageClient(log, options.mcpPort)
 
             let progressBar = progress()
             const indexing = new Promise(resolve => {
@@ -87,49 +46,27 @@ async function main(argv: string[]) {
                 paths ?? ['**/*.php'],
                 options.exclude,
                 DefaultPhpVersion,
-                typeof options.format == 'string' ? options.format : DefaultCodeStyle
             )
+
+            if (client.MCPServerPort) {
+                log.info(`MCP Server running on 127.0.0.1:${client.MCPServerPort} ...`)
+            }
+            else {
+                log.error(new Error('Failed to start MCP Server'))
+                await client.exit()
+                process.exit(1)
+            }
+
+            //
             await indexing
 
-            //
-            if (options.format) {
-                var docIds = await client.listDocuments()
-                for (const id of docIds) {
-                    //
-                    log.info(`Formatting document '${id.uri}' ...`)
-                    const doc = await client.openDocument(id.uri, 'php')
-                    try {
-                        //
-                        const newdoc = await client.rangeFormat(doc)
-                        if (newdoc.version != doc.version && newdoc.content != doc.content) {
-                            log.info(`Saving formatted document '${newdoc.uri}' ...`)
-                            newdoc.save(newdoc.uri)
-                        }
-                    }
-                    catch (e) {
-                        log.error(<Error>e)
-                    }
-                    finally {
-                        //
-                        client.closeDocument(doc.uri)
-                    }
-                }
-            }
-
-            //
-            if (options.check) {
-                let diagnostics = await client.diagnostics()
-
-                progressBar.dispose() // remove progress bar
-
-                for (const b of diagnostics) {
-                    for (const d of b.diagnostics)
-                        console.log(`${b.uri}(${d.range.start.line + 1}, ${d.range.start.character + 1}): ${d.message}`)
-                }
-            }
-
-            await client.exit()
-            process.exit(0)
+            // await Ctrl+C to gracefully exit
+            log.info(`Press Ctrl+C to exit.`)
+            process.on('SIGINT', async () => {
+                log.info('Received Ctrl+C, exiting...')
+                await client.exit()
+                process.exit(0)
+            })
         })
         .parseAsync(argv)
 }

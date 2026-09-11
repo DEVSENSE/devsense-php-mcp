@@ -1,2 +1,3 @@
 export const DefaultPhpVersion = '8.5'
-export const DefaultComposerNodes = 'false'
+export const DefaultComposerNodes = 'true'
+export const DefaultMcpServerPort = 9101
