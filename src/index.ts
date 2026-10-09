@@ -1,5 +1,7 @@
 #! /usr/bin/env node
 
+import fs from 'fs';
+import path from 'path';
 import { progress } from './progress';
 import { InvalidArgumentError, Option, program } from 'commander';
 import { LanguageClient } from './client';
@@ -8,32 +10,73 @@ import { TextDocument } from './textdocument';
 import { DefaultMcpServerPort, DefaultPhpVersion } from './consts';
 import { Logger } from './logger';
 
+import { createDiagnosticHandler, StdioForwarder } from './stdio';
+
 async function main(argv: string[]) {
+    const pkgVersion: string = require('../package.json').version;
 
     await program
-        .version(require('../package.json').version)
+        .version(pkgVersion)
         .name('devsense-php-mcp')
         .description('PHP MCP Server')
         .showHelpAfterError(true)
         .option('-r, --root <path>', 'Root directory, to which are other parameters relative. Current working directory by default.')
         .option('-x, --exclude <path...>', 'Files or directories to be excluded from indexing.')
-        .option('-p, --mcp-port <N>', 'Specify the MCP server port number.', str => parseInt(str), DefaultMcpServerPort)
+        .option('-p, --mcp-port <N>', 'Specify the MCP server port number. If --stdio is used without --mcp-port, a random port will be selected.', str => parseInt(str))
+        .option('--stdio', 'Communicate with MCP client using standard input and output (STDIO).')
+        .option('--no-composer-check', 'Skip checking for composer.json in the root directory when running in --stdio mode.')
         .argument('[path...]', 'Files or directories to be indexed.')
         .action(async (paths: string[] | undefined, options) => {
 
-            //
-            const log = new Logger(true)
-            const root = options.root ?? process.cwd()
+            const isStdio = !!options.stdio
+            const log = new Logger(true, isStdio)
+            const root = path.resolve(options.root ?? process.cwd())
 
-            const client = new LanguageClient(log, options.mcpPort)
+            if (isStdio && options.composerCheck !== false) {
+                const composerPath = path.join(root, 'composer.json')
+                if (!fs.existsSync(composerPath)) {
+                    const diagnosticMessage =
+                        `DEVSENSE PHP MCP Server did not start the PHP language server or index files because no composer.json was found in '${root}'. ` +
+                        `To enable PHP indexing in this workspace, run from a directory containing composer.json, specify a PHP project root with '-r <path>', or pass '--no-composer-check' to force indexing.`
 
-            let progressBar = progress()
+                    log.info(diagnosticMessage)
+
+                    const forwarder = new StdioForwarder({
+                        localHandler: createDiagnosticHandler(diagnosticMessage, pkgVersion),
+                        onClose: () => {
+                            process.exit(0)
+                        },
+                    })
+                    forwarder.start()
+
+                    process.on('SIGINT', () => {
+                        process.exit(0)
+                    })
+                    return
+                }
+            }
+
+            const port = options.mcpPort ?? (isStdio ? undefined : DefaultMcpServerPort)
+            const client = new LanguageClient(log, port)
+
+            let forwarder: StdioForwarder | undefined
+            if (isStdio) {
+                forwarder = new StdioForwarder({
+                    onClose: async () => {
+                        await client.exit()
+                        process.exit(0)
+                    }
+                })
+                forwarder.start()
+            }
+
+            let progressBar = isStdio ? undefined : progress()
             const indexing = new Promise(resolve => {
                 let onLoadStatus = client.onLoadStatus(status => {
                     if (!status.isLoadPending && !status.pendingAnalysis && !status.pendingParse) {
                         resolve(true)
                     }
-                    else {
+                    else if (progressBar) {
                         let total = status.totalFiles * 2
                         let pending = (status.pendingAnalysis ?? 0) + (status.pendingParse ?? 0)
                         progressBar.update(total - pending, total)
@@ -57,11 +100,17 @@ async function main(argv: string[]) {
                 process.exit(1)
             }
 
+            if (forwarder) {
+                forwarder.setPort(client.MCPServerPort)
+            }
+
             //
             await indexing
 
             // await Ctrl+C to gracefully exit
-            log.info(`Press Ctrl+C to exit.`)
+            if (!isStdio) {
+                log.info(`Press Ctrl+C to exit.`)
+            }
             process.on('SIGINT', async () => {
                 log.info('Received Ctrl+C, exiting...')
                 await client.exit()
