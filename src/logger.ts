@@ -11,7 +11,7 @@ export class Logger {
 
     info(text: string) {
         if (this.verbose) {
-            process.stdout.write(`[${new Date().toISOString()}] ${text}\n`)
+            process.stderr.write(`[${new Date().toISOString()}] ${text}\n`)
         }
     }
 

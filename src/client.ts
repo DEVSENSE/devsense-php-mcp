@@ -1,5 +1,4 @@
 import { spawn } from 'child_process';
-import path from 'path';
 import * as rpc from 'vscode-jsonrpc/node';
 import { EventEmitter } from './event';
 import * as DevsenseNode from 'devsense-php-ls-node';
@@ -139,17 +138,19 @@ export class LanguageClient {
         // }
 
         const lspath = LS.languageServerPath()
-        //const lspath = `${__dirname}/../node_modules/devsense-php-ls-${platform()}-${arch()}/dist/devsense.php.ls.exe`
-        //const lspath = "C:\\Users\\jmise\\Projects\\phptools-vscode\\src\\Devsense.PHP.LanguageServer\\bin\\Debug\\net10.0\\devsense.php.ls.exe"
+        if (!lspath) {
+            throw new Error('PHP language server executable not found')
+        }
         const lsprocess = spawn(
-            lspath ?? path.resolve(lspath),
+            lspath,
             args, {
-                shell: true,
+                windowsHide: true,
                 stdio: ['pipe', 'pipe', 'pipe', 'pipe']
             })
 
+        lsprocess.on('error', error => this.log.error(error))
         lsprocess.stdout.on('data', (data) => {
-            //console.log('stdout: ' + data.toString());
+            //console.error('stdout: ' + data.toString());
         })
 
         lsprocess.stderr.on('data', (data) => {
