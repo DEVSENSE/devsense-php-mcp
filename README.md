@@ -2,15 +2,7 @@
 
 Standalone MCP server built on `devsense-php-ls`, the DEVSENSE PHP Language Server.
 
-## Installation
-
-Install with Node.js 20 or 22 and later:
-
-```sh
-npm install -g devsense-php-mcp
-```
-
-## Connect an MCP client using stdio
+## Configure MCP client using stdio
 
 Configure your MCP client to launch the command with `--transport=stdio`. For example, in a client that uses an `mcpServers` configuration:
 
@@ -18,14 +10,15 @@ Configure your MCP client to launch the command with `--transport=stdio`. For ex
 {
   "mcpServers": {
     "php": {
-      "command": "devsense-php-mcp",
-      "args": ["--transport=stdio", "--root", "/absolute/path/to/php-project"]
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "devsense-php-mcp", "--transport=stdio", "--root", "path/to/php-project"]
     }
   }
 }
 ```
 
-Replace the root path with your PHP workspace. On Windows, use an absolute Windows path with escaped backslashes in JSON. The root defaults to the process's current working directory. Configuration format and command resolution vary by client.
+Replace the root path with your PHP workspace; absolute or relative to current working directory. Configuration format and command resolution vary by client.
 
 The client starts and stops the server. Standard output is reserved for MCP messages; diagnostics are written to standard error. The language server still runs a local HTTP server internally; stdio mode selects an available localhost port by default. Use `--mcp-port` to choose a specific port when necessary.
 
